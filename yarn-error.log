@@ -1,0 +1,66 @@
+Arguments: 
+  C:\Program Files\nodejs\node.exe C:\Users\anish\AppData\Roaming\npm\node_modules\yarn\bin\yarn.js install
+
+PATH: 
+  C:\Program Files (x86)\Common Files\Oracle\Java\javapath;C:\Python311\Scripts\;C:\Python311\;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\WireGuard\;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\Cloudflare\Cloudflare WARP\;C:\Program Files\Git\cmd;C:\Users\anish\.cargo\bin;C:\Users\anish\AppData\Local\Microsoft\WindowsApps;C:\Users\anish\AppData\Local\Programs\Microsoft VS Code\bin;C:\Users\anish\AppData\Roaming\npm;C:\Users\anish\AppData\Local\GitHubDesktop\bin
+
+Yarn version: 
+  1.22.19
+
+Node version: 
+  18.16.0
+
+Platform: 
+  win32 x64
+
+Trace: 
+  Error: connect ENETUNREACH 2606:4700::6810:1423:443
+      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16)
+
+npm manifest: 
+  {
+    "name": "psa",
+    "version": "1.0.0",
+    "description": "Decentralized Photo Sharing Application",
+    "scripts": {
+      "test": "npx hardhat test",
+      "dev": "npx parcel public/index.html",
+      "build":"npx parcel build public/index.html"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+      "assert": "^2.0.0",
+      "buffer": "^5.7.1",
+      "hardhat": "^2.14.0",
+      "https-browserify": "^1.0.0",
+      "mocha": "^10.2.0",
+      "os-browserify": "^0.3.0",
+      "parcel": "^2.8.3",
+      "path-browserify": "^1.0.1",
+      "process": "^0.11.10",
+      "punycode": "^1.4.1",
+      "querystring-es3": "^0.2.1",
+      "stream-http": "^3.2.0",
+      "url": "^0.11.0"
+    },
+    "dependencies": {
+      "@celo/contractkit": "^3.2.0",
+      "@celo/react-celo": "^5.0.3",
+      "@nomicfoundation/hardhat-toolbox": "^2.0.2",
+      "@openzeppelin/contracts": "^4.8.3",
+      "dotenv": "^16.0.3",
+      "react": "^18.2.0",
+      "react-dom": "^18.2.0",
+      "reactstrap": "^9.1.9",
+      "web3.storage": "^4.5.4",
+      "zustand": "^4.3.8"
+    }
+  }
+
+yarn manifest: 
+  No manifest
+
+Lockfile: 
+  No lockfile

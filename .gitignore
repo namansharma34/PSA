@@ -1,0 +1,8 @@
+cache
+artifacts/
+package-lock.json
+node_modules
+.parcel-cache
+.env
+dist
+./yarn-error.log
