@@ -4,38 +4,34 @@ pragma solidity ^0.8.1;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+
 library StringUtils {
     /// @dev Does a byte-by-byte lexicographical comparison of two strings.
     /// @return a negative number if `_a` is smaller, zero if they are equal
-    /// and a positive numbe if `_b` is smaller.
-    function compare(string memory _a, string memory _b) public pure returns (int) {
-        bytes memory a = bytes(_a);
-        bytes memory b = bytes(_b);
-        uint minLength = a.length;
-        if (b.length < minLength) minLength = b.length;
-        //@todo unroll the loop into increments of 32 and do full 32 byte comparisons
-        for (uint i = 0; i < minLength; i ++)
-            if (a[i] < b[i])
+    /// and a positive number if `_b` is smaller.
+    function compare(bytes32 _a, bytes32 _b) internal pure returns (int) {
+        for (uint256 i = 0; i < 32; i++) {
+            if (_a[i] < _b[i]) {
                 return -1;
-            else if (a[i] > b[i])
+            } else if (_a[i] > _b[i]) {
                 return 1;
-        if (a.length < b.length)
-            return -1;
-        else if (a.length > b.length)
-            return 1;
-        else
-            return 0;
+            }
+        }
+        return 0;
     }
+
     /// @dev Compares two strings and returns true iff they are equal.
-    function equal(string memory _a, string memory _b) public pure returns (bool) {
+    function equal(bytes32 _a, bytes32 _b) internal pure returns (bool) {
         return compare(_a, _b) == 0;
     }
 }
+
 contract PhotoSharing is ERC721 {
     using Counters for Counters.Counter;
+
     struct Photo {
-        string ipfsHash;
-        string description;
+        bytes32 ipfsHash;
+        bytes32 description;
         uint256[] comments;
         address[] likes;
         uint256 time;
@@ -43,29 +39,29 @@ contract PhotoSharing is ERC721 {
     }
 
     struct Comment {
-        string text;
+        bytes32 text;
         address author;
     }
-    
-    struct ReturnComment{
-        string text;
-        string username;
+
+    struct ReturnComment {
+        bytes32 text;
+        bytes32 username;
     }
 
     struct PhotoInfo {
-        string ipfsHash;
-        string description;
+        bytes32 ipfsHash;
+        bytes32 description;
         uint256 id;
         address[] likes;
-        string author;
+        bytes32 author;
         uint256 time;
         ReturnComment[] comments;
     }
 
     mapping(uint256 => Photo) private photos;
     mapping(uint256 => Comment) private commentsById;
-    mapping(address => string) private usernames;
-    string[] uName;
+    mapping(address => bytes32) private usernames;
+    bytes32[] uName;
     Counters.Counter private _tokenIdCounter;
     Counters.Counter private _commentIdCounter;
 
@@ -75,30 +71,26 @@ contract PhotoSharing is ERC721 {
 
     constructor() ERC721("PhotoSharing", "PS") {}
 
-    function uploadPhoto(string memory _ipfsHash, string memory description) public onlyUser {
+    function uploadPhoto(bytes32 _ipfsHash, bytes32 _description) public onlyUser {
         _tokenIdCounter.increment();
         uint256 newPhotoId = _tokenIdCounter.current();
         _mint(msg.sender, newPhotoId);
         Photo storage newPhoto = photos[newPhotoId];
         newPhoto.ipfsHash = _ipfsHash;
         newPhoto.owner = msg.sender;
-        newPhoto.description = description;
+        newPhoto.description = _description;
         newPhoto.time = block.timestamp;
         emit PhotoUploaded(newPhotoId, msg.sender);
     }
 
-    function checkAddress() public view returns(bool){
-        uint _len = bytes(usernames[msg.sender]).length;
-        if(_len > 0) {
-            return  true;
-        }else{
-            return  false;
-        }
+    function checkAddress() public view returns (bool) {
+        bytes32  username = usernames[msg.sender];
+        return username != bytes32(0);
     }
 
-    function checkUsername(string memory username) public view returns(bool){
-        for(uint i =0 ; i < uName.length; i++){
-            if(StringUtils.equal(uName[i],username)){
+    function checkUsername(bytes32 username) public view returns (bool) {
+        for (uint256 i = 0; i < uName.length; i++) {
+            if (uName[i] == username) {
                 return true;
             }
         }
@@ -110,7 +102,7 @@ contract PhotoSharing is ERC721 {
         _;
     }
 
-    function addComment(uint256 _photoId, string memory _comment) public onlyUser {
+    function addComment(uint256 _photoId, bytes32 _comment) public onlyUser {
         require(_exists(_photoId), "Photo does not exist");
         _commentIdCounter.increment();
         uint256 newCommentId = _commentIdCounter.current();
@@ -127,9 +119,9 @@ contract PhotoSharing is ERC721 {
         emit PhotoLiked(_photoId, msg.sender);
     }
 
-    function setUsername(string memory _username) public {
-        require(!checkAddress(),"Cannot Register Twice");
-        require(!checkUsername(_username),"Choose Another Name");
+    function setUsername(bytes32 _username) public {
+        require(!checkAddress(), "Cannot Register Twice");
+        require(!checkUsername(_username), "Choose Another Name");
         usernames[msg.sender] = _username;
         uName.push(_username);
     }
@@ -146,7 +138,15 @@ contract PhotoSharing is ERC721 {
                     Comment storage comment = commentsById[commentId];
                     comments[j] = ReturnComment(comment.text, usernames[comment.author]);
                 }
-                photosInfo[i-1] = PhotoInfo(photo.ipfsHash, photo.description, i, photo.likes, usernames[photo.owner], photo.time, comments);
+                photosInfo[i - 1] = PhotoInfo(
+                    photo.ipfsHash,
+                    photo.description,
+                    i,
+                    photo.likes,
+                    usernames[photo.owner],
+                    photo.time,
+                    comments
+                );
             }
         }
         return photosInfo;
