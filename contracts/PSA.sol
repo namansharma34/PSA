@@ -8,7 +8,7 @@ library StringUtils {
     /// @dev Does a byte-by-byte lexicographical comparison of two strings.
     /// @return a negative number if `_a` is smaller, zero if they are equal
     /// and a positive numbe if `_b` is smaller.
-    function compare(string memory _a, string memory _b) public pure returns (int) {
+    function compare(string memory _a, string memory _b) internal  pure returns (int) {
         bytes memory a = bytes(_a);
         bytes memory b = bytes(_b);
         uint minLength = a.length;
@@ -27,7 +27,7 @@ library StringUtils {
             return 0;
     }
     /// @dev Compares two strings and returns true iff they are equal.
-    function equal(string memory _a, string memory _b) public pure returns (bool) {
+    function equal(string memory _a, string memory _b) internal pure returns (bool) {
         return compare(_a, _b) == 0;
     }
 }
@@ -65,7 +65,9 @@ contract PhotoSharing is ERC721 {
     mapping(uint256 => Photo) private photos;
     mapping(uint256 => Comment) private commentsById;
     mapping(address => string) private usernames;
-    string[] uName;
+    mapping(string => bool) private usernameExists;
+    mapping(address => bool) private hasUsername;
+    // string[] uName;
     Counters.Counter private _tokenIdCounter;
     Counters.Counter private _commentIdCounter;
 
@@ -88,21 +90,11 @@ contract PhotoSharing is ERC721 {
     }
 
     function checkAddress() public view returns(bool){
-        uint _len = bytes(usernames[msg.sender]).length;
-        if(_len > 0) {
-            return  true;
-        }else{
-            return  false;
-        }
+        return hasUsername[msg.sender];
     }
 
     function checkUsername(string memory username) public view returns(bool){
-        for(uint i =0 ; i < uName.length; i++){
-            if(StringUtils.equal(uName[i],username)){
-                return true;
-            }
-        }
-        return false;
+        return usernameExists[username];
     }
 
     modifier onlyUser {
@@ -127,28 +119,43 @@ contract PhotoSharing is ERC721 {
         emit PhotoLiked(_photoId, msg.sender);
     }
 
+    function isValidUsername(string memory _username) internal pure returns (bool) {
+        bytes memory usernameBytes = bytes(_username);
+        if (usernameBytes.length < 3 || usernameBytes.length > 20) {
+            return false;
+        }
+        
+        // Validate any additional restrictions or criteria here
+        
+        return true;
+    }
+
+
     function setUsername(string memory _username) public {
         require(!checkAddress(),"Cannot Register Twice");
         require(!checkUsername(_username),"Choose Another Name");
+        require(isValidUsername(_username), "Invalid Username");
         usernames[msg.sender] = _username;
-        uName.push(_username);
+        usernameExists[_username] = true;
+        hasUsername[msg.sender] = true;
     }
 
     function getAllPhotos() public onlyUser view returns (PhotoInfo[] memory) {
         uint256 numPhotos = _tokenIdCounter.current();
         PhotoInfo[] memory photosInfo = new PhotoInfo[](numPhotos);
-        for (uint256 i = 1; i <= numPhotos; i++) {
-            if (_exists(i)) {
-                Photo storage photo = photos[i];
+        for (uint256 i = 0; i < numPhotos; i++) {
+            if (_exists(i + 1)) {
+                Photo storage photo = photos[i + 1];
                 ReturnComment[] memory comments = new ReturnComment[](photo.comments.length);
                 for (uint256 j = 0; j < photo.comments.length; j++) {
                     uint256 commentId = photo.comments[j];
                     Comment storage comment = commentsById[commentId];
                     comments[j] = ReturnComment(comment.text, usernames[comment.author]);
                 }
-                photosInfo[i-1] = PhotoInfo(photo.ipfsHash, photo.description, i, photo.likes, usernames[photo.owner], photo.time, comments);
+                photosInfo[i] = PhotoInfo(photo.ipfsHash, photo.description, i + 1, photo.likes, usernames[photo.owner], photo.time, comments);
             }
         }
         return photosInfo;
     }
+
 }
