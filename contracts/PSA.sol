@@ -77,10 +77,7 @@ contract PhotoSharing is ERC721 {
         address author;
     }
     
-    struct ReturnComment{
-        string text;
-        string username;
-    }
+
 
     /**
     * @dev Structure representing photo information.
@@ -100,7 +97,7 @@ contract PhotoSharing is ERC721 {
         address[] likes;
         string author;
         uint256 time;
-        ReturnComment[] comments;
+        uint256[] comments;
     }
 
     /**
@@ -108,14 +105,14 @@ contract PhotoSharing is ERC721 {
     *
     * photos Mapping where the key is the photo ID and the value is the corresponding Photo struct.
     */
-    mapping(uint256 => Photo) private photos;
+    mapping(uint256 => Photo) public photos;
 
     /**
     * @dev Mapping to store comment information by comment ID.
     *
     * commentsById Mapping where the key is the comment ID and the value is the corresponding Comment struct.
     */
-    mapping(uint256 => Comment) private commentsById;
+    mapping(uint256 => Comment) public commentsById;
 
     /**
     * @dev Mapping to store usernames by address.
@@ -202,7 +199,7 @@ contract PhotoSharing is ERC721 {
     * - The IPFS hash must not be an empty string.
     * - The description must not be an empty string.
     */
-    function uploadPhoto(string memory _ipfsHash, string memory description) public onlyUser {
+    function uploadPhoto(string calldata _ipfsHash, string calldata description) public onlyUser {
 
         require(bytes(_ipfsHash).length > 0, "Invalid IPFS hash");
         require(bytes(description).length > 0, "Invalid description");
@@ -266,8 +263,9 @@ contract PhotoSharing is ERC721 {
     * Requirements:
     * - The photo with the given ID must exist.
     */
-    function addComment(uint256 _photoId, string memory _comment) public onlyUser {
+    function addComment(uint256 _photoId, string calldata _comment) public onlyUser {
         require(_exists(_photoId), "Photo does not exist");
+        require(bytes(_comment).length > 0, "Empty comment");
         _commentIdCounter.increment();
         uint256 newCommentId = _commentIdCounter.current();
         Comment storage newComment = commentsById[newCommentId];
@@ -292,25 +290,6 @@ contract PhotoSharing is ERC721 {
     }
 
     /**
-    * @dev Checks if a username is valid.
-    *
-    * @param _username The username to validate.
-    * @return A boolean indicating whether the username is valid or not.
-    */
-    function isValidUsername(string memory _username) internal pure returns (bool) {
-        
-        bytes memory usernameBytes = bytes(_username);
-        if (usernameBytes.length < 3 || usernameBytes.length > 20) {
-            return false;
-        }
-        
-        // Validate any additional restrictions or criteria here
-        
-        return true;
-    }
-
-
-    /**
     * @dev Sets a username for the calling user.
     *
     * @param _username The username to set.
@@ -323,7 +302,8 @@ contract PhotoSharing is ERC721 {
     function setUsername(string memory _username) public {
         require(!checkAddress(),"Cannot Register Twice");
         require(!checkUsername(_username),"Choose Another Name");
-        require(isValidUsername(_username), "Invalid Username");
+        bytes memory usernameBytes = bytes(_username);
+        require(usernameBytes.length >= 3 || usernameBytes.length <= 20, "Invalid Username");
         usernames[msg.sender] = _username;
         usernameExists[_username] = true;
         hasUsername[msg.sender] = true;
@@ -339,19 +319,40 @@ contract PhotoSharing is ERC721 {
     function getAllPhotos() public onlyUser view returns (PhotoInfo[] memory) {
         uint256 numPhotos = _tokenIdCounter.current();
         PhotoInfo[] memory photosInfo = new PhotoInfo[](numPhotos);
-        for (uint256 i = 0; i < numPhotos; i++) {
-            if (_exists(i + 1)) {
-                Photo storage photo = photos[i + 1];
-                ReturnComment[] memory comments = new ReturnComment[](photo.comments.length);
-                for (uint256 j = 0; j < photo.comments.length; j++) {
-                    uint256 commentId = photo.comments[j];
-                    Comment storage comment = commentsById[commentId];
-                    comments[j] = ReturnComment(comment.text, usernames[comment.author]);
-                }
-                photosInfo[i] = PhotoInfo(photo.ipfsHash, photo.description, i + 1, photo.likes, usernames[photo.owner], photo.time, comments);
+        for (uint256 i = 1; i < numPhotos; i++) {
+            if (_exists(i)) {
+                Photo storage photo = photos[i];
+                photosInfo[i] = PhotoInfo(photo.ipfsHash, photo.description, i, photo.likes, usernames[photo.owner], photo.time, photo.comments);
             }
         }
         return photosInfo;
+    }
+
+        /**
+     * @dev See {IERC721-transferFrom}.
+     * Changes is made to transferFrom to keep track of new owners
+     */
+    function transferFrom(
+        address from,
+        address to,
+        uint256 tokenId
+    ) public override {
+        photos[tokenId].owner = to;
+        super.transferFrom(from, to, tokenId);
+    }
+
+    /**
+     * @dev See {IERC721-safeTransferFrom}.
+     * Changes is made to safeTransferFrom to keep track of new owners
+     */
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId,
+        bytes memory data
+    ) public override {
+        photos[tokenId].owner = to;
+        _safeTransfer(from, to, tokenId, data);
     }
 
 }
