@@ -203,8 +203,8 @@ contract PhotoSharing is ERC721 {
 
         require(bytes(_ipfsHash).length > 0, "Invalid IPFS hash");
         require(bytes(description).length > 0, "Invalid description");
-        uint256 newPhotoId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
+        uint256 newPhotoId = _tokenIdCounter.current();
         _mint(msg.sender, newPhotoId);
         Photo storage newPhoto = photos[newPhotoId];
         newPhoto.ipfsHash = _ipfsHash;
@@ -266,8 +266,8 @@ contract PhotoSharing is ERC721 {
     function addComment(uint256 _photoId, string calldata _comment) public onlyUser {
         require(_exists(_photoId), "Photo does not exist");
         require(bytes(_comment).length > 0, "Empty comment");
-        uint256 newCommentId = _commentIdCounter.current();
         _commentIdCounter.increment();
+        uint256 newCommentId = _commentIdCounter.current();
         Comment storage newComment = commentsById[newCommentId];
         newComment.text = _comment;
         newComment.author = msg.sender;
@@ -319,10 +319,10 @@ contract PhotoSharing is ERC721 {
     function getAllPhotos() public onlyUser view returns (PhotoInfo[] memory) {
         uint256 numPhotos = _tokenIdCounter.current();
         PhotoInfo[] memory photosInfo = new PhotoInfo[](numPhotos);
-        for (uint256 i = 0; i < numPhotos; i++) {
+        for (uint256 i = 1; i < numPhotos; i++) {
             if (_exists(i)) {
                 Photo storage photo = photos[i];
-                photosInfo[i] = PhotoInfo(photo.ipfsHash, photo.description, i + 1, photo.likes, usernames[photo.owner], photo.time, photo.comments);
+                photosInfo[i] = PhotoInfo(photo.ipfsHash, photo.description, i, photo.likes, usernames[photo.owner], photo.time, photo.comments);
             }
         }
         return photosInfo;
