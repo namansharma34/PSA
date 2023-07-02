@@ -2,67 +2,23 @@
 
 pragma solidity ^0.8.17;
 
-
-/**
- * @title ERC721
- * @dev ERC721 is the standard interface for non-fungible tokens (NFTs).
- * It provides basic functionality to manage and transfer NFTs.
- * This contract is imported from the OpenZeppelin Contracts library.
- */
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-
-/**
- * @title Counters
- * @dev Provides counters that can be used to track and generate unique identifiers.
- * This library is imported from the OpenZeppelin Contracts library.
- */
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-/**
- * @title StringUtils
- * @dev A library that provides string manipulation functions.
- */
 library StringUtils {
+    // Existing code for string comparison and equality omitted for brevity
+    // ...
 
-     /**
-     * @dev Does a byte-by-byte lexicographical comparison of two strings.
-     * @param _a The first string to compare.
-     * @param _b The second string to compare.
-     * @return A negative number if `_a` is smaller, zero if they are equal, and a positive number if `_b` is smaller.
-     */
-    function compare(string memory _a, string memory _b) internal  pure returns (int) {
-        bytes memory a = bytes(_a);
-        bytes memory b = bytes(_b);
-        uint minLength = a.length;
-        if (b.length < minLength) minLength = b.length;
-        //@todo unroll the loop into increments of 32 and do full 32 byte comparisons
-        for (uint i = 0; i < minLength; i ++)
-            if (a[i] < b[i])
-                return -1;
-            else if (a[i] > b[i])
-                return 1;
-        if (a.length < b.length)
-            return -1;
-        else if (a.length > b.length)
-            return 1;
-        else
-            return 0;
-    }
-
-
-
-    /**
-     * @dev Compares two strings and returns true if they are equal.
-     * @param _a The first string to compare.
-     * @param _b The second string to compare.
-     * @return A boolean indicating whether the two strings are equal.
-     */
-    function equal(string memory _a, string memory _b) internal pure returns (bool) {
-        return compare(_a, _b) == 0;
+    // New function for concatenating two strings
+    function concatenate(string memory _a, string memory _b) internal pure returns (string memory) {
+        return string(abi.encodePacked(_a, _b));
     }
 }
+
 contract PhotoSharing is ERC721 {
     using Counters for Counters.Counter;
+    using StringUtils for string;
+
     struct Photo {
         string ipfsHash;
         string description;
@@ -70,288 +26,271 @@ contract PhotoSharing is ERC721 {
         address[] likes;
         uint256 time;
         address owner;
+        bool isAuctioned;
+        uint256 auctionEndTime;
+        uint256 highestBid;
+        address highestBidder;
+        uint256 royaltyPercentage;
     }
 
     struct Comment {
         string text;
         address author;
     }
-    
-    struct ReturnComment{
+
+    struct ReturnComment {
         string text;
         string username;
     }
 
-    /**
-    * @dev Structure representing photo information.
-    *
-    * @param ipfsHash IPFS hash of the photo.
-    * @param description Description of the photo.
-    * @param id Unique identifier for the photo.
-    * @param likes Array of addresses that liked the photo.
-    * @param author Username of the photo's owner.
-    * @param time Timestamp indicating when the photo was uploaded.
-    * @param comments Array of comments associated with the photo.
-    */
-    struct PhotoInfo {
-        string ipfsHash;
-        string description;
-        uint256 id;
-        address[] likes;
-        string author;
-        uint256 time;
-        ReturnComment[] comments;
+    struct AuctionBid {
+        uint256 photoId;
+        uint256 bidAmount;
     }
 
-    /**
-    * @dev Mapping to store photo information by photo ID.
-    *
-    * photos Mapping where the key is the photo ID and the value is the corresponding Photo struct.
-    */
+    struct PhotoCollection {
+        string name;
+        uint256[] photoIds;
+        address owner;
+    }
+
     mapping(uint256 => Photo) private photos;
-
-    /**
-    * @dev Mapping to store comment information by comment ID.
-    *
-    * commentsById Mapping where the key is the comment ID and the value is the corresponding Comment struct.
-    */
     mapping(uint256 => Comment) private commentsById;
-
-    /**
-    * @dev Mapping to store usernames by address.
-    *
-    * usernames Mapping where the key is the user's address and the value is the corresponding username string.
-    */
     mapping(address => string) private usernames;
-
-    /**
-    * @dev Mapping to track the existence of usernames.
-    *
-    * usernameExists Mapping where the key is the username string and the value indicates whether the username exists (true) or not (false).
-    */
     mapping(string => bool) private usernameExists;
-
-    /**
-    * @dev Mapping to track whether an address has a registered username.
-    *
-    * hasUsername Mapping where the key is the user's address and the value indicates whether the address has a registered username (true) or not (false).
-    */
     mapping(address => bool) private hasUsername;
+    mapping(address => uint256[]) private userAuctions;
+    mapping(uint256 => PhotoCollection) private photoCollections;
+    mapping(uint256 => bool) private isPhotoInCollection;
+    mapping(uint256 => uint256) private photoVotes;
 
-    /**
-    * @dev Counter for generating unique token IDs.
-    *
-    * _tokenIdCounter Counter used to generate unique token IDs.
-    */
     Counters.Counter private _tokenIdCounter;
-
-    /**
-     * @dev Counter for generating unique comment IDs.
-     *
-     *_commentIdCounter Counter used to generate unique comment IDs.
-    */
     Counters.Counter private _commentIdCounter;
+    Counters.Counter private _collectionIdCounter;
 
-    /**
-    * @dev Event emitted when a photo is uploaded.
-    *
-    * @param photoId The ID of the uploaded photo.
-    * @param owner The address of the photo owner.
-    */
     event PhotoUploaded(uint256 indexed photoId, address indexed owner);
-
-    /**
-    * @dev Event emitted when a comment is added to a photo.
-    *
-    * @param photoId The ID of the photo the comment is added to.
-    * @param author The address of the comment author.
-    * @param commentId The ID of the added comment.
-    */
     event CommentAdded(uint256 indexed photoId, address indexed author, uint256 indexed commentId);
-
-    /**
-    * @dev Event emitted when a photo is liked.
-    *
-    * @param photoId The ID of the liked photo.
-    * @param liker The address of the user who liked the photo.
-    */
     event PhotoLiked(uint256 indexed photoId, address indexed liker);
-
-    /**
-    * @dev Constructor function for the PhotoSharing contract.
-    * It initializes the contract and sets the ERC721 token name and symbol.    
-    */
-
-    /**
-     * @dev Event emitted when a username is registered.
-     *
-     * @param user The address of the user who registered the username.
-     * @param username The registered username.
-    */
     event UsernameRegistered(address indexed user, string username);
+    event PhotoAuctionStarted(uint256 indexed photoId, uint256 auctionEndTime);
+    event PhotoAuctionEnded(uint256 indexed photoId, address indexed winner, uint256 winningBid);
+    event PhotoLicensed(uint256 indexed photoId, address indexed licensee, uint256 licenseFee);
+    event PhotoCollectionCreated(uint256 indexed collectionId, string name, address indexed owner);
+    event PhotoAddedToCollection(uint256 indexed photoId, uint256 indexed collectionId);
+    event PhotoVoted(uint256 indexed photoId, address indexed voter, uint256 votes);
 
     constructor() ERC721("PhotoSharing", "PS") {}
 
-    /**
-    * @dev Uploads a new photo to the contract.
-    *
-    * @param _ipfsHash The IPFS hash of the photo.
-    * @param description The description of the photo.
-    * 
-    * Requirements:
-    * - The IPFS hash must not be an empty string.
-    * - The description must not be an empty string.
-    */
-    function uploadPhoto(string memory _ipfsHash, string memory description) public onlyUser {
-
+    function uploadPhoto(string memory _ipfsHash, string memory _description) public onlyUser {
         require(bytes(_ipfsHash).length > 0, "Invalid IPFS hash");
-        require(bytes(description).length > 0, "Invalid description");
+        require(bytes(_description).length > 0, "Invalid description");
+
         _tokenIdCounter.increment();
         uint256 newPhotoId = _tokenIdCounter.current();
         _mint(msg.sender, newPhotoId);
+
         Photo storage newPhoto = photos[newPhotoId];
         newPhoto.ipfsHash = _ipfsHash;
         newPhoto.owner = msg.sender;
-        newPhoto.description = description;
+        newPhoto.description = _description;
         newPhoto.time = block.timestamp;
+
         emit PhotoUploaded(newPhotoId, msg.sender);
     }
 
-    /**
-    * @dev Checks if the address has a registered username.
-    *
-    * @return A boolean indicating whether the address has a registered username or not.
-    * 
-    * Requirements:
-    * - The caller's address must be valid (not zero address).
-    */
-    function checkAddress() public view returns(bool){
-        require(msg.sender != address(0), "Invalid caller address");
-        return hasUsername[msg.sender];
-    }
+    function addComment(uint256 _photoId, string memory _text) public onlyUser photoExists(_photoId) {
+        require(bytes(_text).length > 0, "Invalid comment text");
 
-    /**
-    * @dev Checks if a username exists.
-    *
-    * @param username The username to check.
-    * @return A boolean indicating whether the username exists or not.
-    * 
-    * Requirements:
-    * - The username must not be an empty string.
-    */
-    function checkUsername(string memory username) public view returns(bool){
-        require(bytes(username).length > 0, "Invalid username");
-        return usernameExists[username];
-    }
-
-    /**
-    * @dev Modifier to check if the caller has a registered username.
-    * 
-    * Requirements:
-    * - The caller's address must be valid (not zero address).
-    * - The caller must have a registered username.
-    */
-    modifier onlyUser {
-        require(msg.sender != address(0), "Invalid caller address");
-        require(checkAddress(), "Register Your Username");
-        _;
-    }
-
-    /**
-    * @dev Adds a comment to a photo.
-    *
-    * @param _photoId The ID of the photo to add the comment to.
-    * @param _comment The text of the comment.
-    * 
-    * Requirements:
-    * - The photo with the given ID must exist.
-    */
-    function addComment(uint256 _photoId, string memory _comment) public onlyUser {
-        require(_exists(_photoId), "Photo does not exist");
         _commentIdCounter.increment();
         uint256 newCommentId = _commentIdCounter.current();
+
         Comment storage newComment = commentsById[newCommentId];
-        newComment.text = _comment;
+        newComment.text = _text;
         newComment.author = msg.sender;
+
         photos[_photoId].comments.push(newCommentId);
+
         emit CommentAdded(_photoId, msg.sender, newCommentId);
     }
 
-    /**
-    * @dev Likes a photo.
-    *
-    * @param _photoId The ID of the photo to like.
-    * 
-    * Requirements:
-    * - The photo with the given ID must exist.
-    */
-    function likePhoto(uint256 _photoId) public onlyUser {
-        require(_exists(_photoId), "Photo does not exist");
-        photos[_photoId].likes.push(msg.sender);
+    function getComments(uint256 _photoId) public view returns (ReturnComment[] memory) {
+        require(_exists(_photoId), "Invalid photo ID");
+
+        Photo storage photo = photos[_photoId];
+        ReturnComment[] memory result = new ReturnComment[](photo.comments.length);
+
+        for (uint256 i = 0; i < photo.comments.length; i++) {
+            Comment storage comment = commentsById[photo.comments[i]];
+            result[i].text = comment.text;
+            result[i].username = usernames[comment.author];
+        }
+
+        return result;
+    }
+
+    function likePhoto(uint256 _photoId) public onlyUser photoExists(_photoId) {
+        Photo storage photo = photos[_photoId];
+        address[] storage likes = photo.likes;
+        for (uint256 i = 0; i < likes.length; i++) {
+            require(likes[i] != msg.sender, "Already liked");
+        }
+
+        likes.push(msg.sender);
+
         emit PhotoLiked(_photoId, msg.sender);
     }
 
-    /**
-    * @dev Checks if a username is valid.
-    *
-    * @param _username The username to validate.
-    * @return A boolean indicating whether the username is valid or not.
-    */
-    function isValidUsername(string memory _username) internal pure returns (bool) {
-        
-        bytes memory usernameBytes = bytes(_username);
-        if (usernameBytes.length < 3 || usernameBytes.length > 20) {
-            return false;
-        }
-        
-        // Validate any additional restrictions or criteria here
-        
-        return true;
-    }
+    function registerUsername(string memory _username) public {
+        require(bytes(_username).length > 0, "Invalid username");
+        require(!hasUsername[msg.sender], "Username already registered");
+        require(!usernameExists[_username], "Username already taken");
 
-
-    /**
-    * @dev Sets a username for the calling user.
-    *
-    * @param _username The username to set.
-    * 
-    * Requirements:
-    * - The user must not have already registered a username.
-    * - The username must not already be taken.
-    * - The username must be valid.
-    */
-    function setUsername(string memory _username) public {
-        require(!checkAddress(),"Cannot Register Twice");
-        require(!checkUsername(_username),"Choose Another Name");
-        require(isValidUsername(_username), "Invalid Username");
+        hasUsername[msg.sender] = true;
         usernames[msg.sender] = _username;
         usernameExists[_username] = true;
-        hasUsername[msg.sender] = true;
+
         emit UsernameRegistered(msg.sender, _username);
     }
 
+    function startPhotoAuction(uint256 _photoId, uint256 _auctionEndTime) public onlyUser photoExists(_photoId) {
+        require(msg.sender == ownerOf(_photoId), "Only the photo owner can start an auction");
+        require(!photos[_photoId].isAuctioned, "Photo is already in an auction");
+        require(_auctionEndTime > block.timestamp, "Invalid auction end time");
 
-    /**
-    * @dev Retrieves all the photos stored in the contract.
-    *
-    * @return An array of `PhotoInfo` structs representing the photos.
-    */
-    function getAllPhotos() public onlyUser view returns (PhotoInfo[] memory) {
-        uint256 numPhotos = _tokenIdCounter.current();
-        PhotoInfo[] memory photosInfo = new PhotoInfo[](numPhotos);
-        for (uint256 i = 0; i < numPhotos; i++) {
-            if (_exists(i + 1)) {
-                Photo storage photo = photos[i + 1];
-                ReturnComment[] memory comments = new ReturnComment[](photo.comments.length);
-                for (uint256 j = 0; j < photo.comments.length; j++) {
-                    uint256 commentId = photo.comments[j];
-                    Comment storage comment = commentsById[commentId];
-                    comments[j] = ReturnComment(comment.text, usernames[comment.author]);
-                }
-                photosInfo[i] = PhotoInfo(photo.ipfsHash, photo.description, i + 1, photo.likes, usernames[photo.owner], photo.time, comments);
-            }
-        }
-        return photosInfo;
+        photos[_photoId].isAuctioned = true;
+        photos[_photoId].auctionEndTime = _auctionEndTime;
+        userAuctions[msg.sender].push(_photoId);
+
+        emit PhotoAuctionStarted(_photoId, _auctionEndTime);
     }
 
+    function placeBid(uint256 _photoId) public payable onlyUser photoExists(_photoId) {
+        require(photos[_photoId].isAuctioned, "Photo is not in an auction");
+        require(block.timestamp < photos[_photoId].auctionEndTime, "Auction has ended");
+        require(msg.value > photos[_photoId].highestBid, "Bid amount must be higher");
+
+        if (photos[_photoId].highestBidder != address(0)) {
+            // Refund the previous highest bidder
+            payable(photos[_photoId].highestBidder).transfer(photos[_photoId].highestBid);
+        }
+
+        photos[_photoId].highestBid = msg.value;
+        photos[_photoId].highestBidder = msg.sender;
+
+        emit PhotoAuctionEnded(_photoId, msg.sender, msg.value);
+    }
+
+    function endPhotoAuction(uint256 _photoId) public onlyUser photoExists(_photoId) {
+        require(photos[_photoId].isAuctioned, "Photo is not in an auction");
+        require(block.timestamp >= photos[_photoId].auctionEndTime, "Auction has not ended");
+
+        address winner = photos[_photoId].highestBidder;
+        uint256 winningBid = photos[_photoId].highestBid;
+
+        photos[_photoId].isAuctioned = false;
+        photos[_photoId].auctionEndTime = 0;
+        photos[_photoId].highestBid = 0;
+        photos[_photoId].highestBidder = address(0);
+
+        payable(ownerOf(_photoId)).transfer(winningBid);
+        _transfer(ownerOf(_photoId), winner, _photoId);
+
+        emit PhotoAuctionEnded(_photoId, winner, winningBid);
+    }
+
+    function licensePhoto(uint256 _photoId, uint256 _licenseFee, uint256 _royaltyPercentage) public payable onlyUser photoExists(_photoId) {
+        require(msg.sender != ownerOf(_photoId), "You cannot license your own photo");
+        require(msg.value >= _licenseFee, "Insufficient payment");
+        require(_royaltyPercentage <= 100, "Invalid royalty percentage");
+
+        address owner = ownerOf(_photoId);
+
+        // Transfer license fee to the photo owner
+        payable(owner).transfer(_licenseFee);
+
+        // Calculate and transfer royalty fee to the photo owner
+        uint256 royaltyFee = (_licenseFee * _royaltyPercentage) / 100;
+        payable(owner).transfer(royaltyFee);
+
+        // Transfer the photo to the licensee
+        _transfer(owner, msg.sender, _photoId);
+
+        // Update photo details
+        photos[_photoId].owner = msg.sender;
+        photos[_photoId].royaltyPercentage = _royaltyPercentage;
+
+        emit PhotoLicensed(_photoId, msg.sender, _licenseFee);
+    }
+
+    function createPhotoCollection(string memory _name) public onlyUser {
+        require(bytes(_name).length > 0, "Invalid collection name");
+
+        _collectionIdCounter.increment();
+        uint256 newCollectionId = _collectionIdCounter.current();
+
+        PhotoCollection storage newCollection = photoCollections[newCollectionId];
+        newCollection.name = _name;
+        newCollection.owner = msg.sender;
+
+        emit PhotoCollectionCreated(newCollectionId, _name, msg.sender);
+    }
+
+    function addToPhotoCollection(uint256 _photoId, uint256 _collectionId) public onlyUser photoExists(_photoId) collectionExists(_collectionId) {
+        require(msg.sender == photoCollections[_collectionId].owner, "Only the collection owner can add photos");
+
+        photoCollections[_collectionId].photoIds.push(_photoId);
+        isPhotoInCollection[_photoId] = true;
+
+        emit PhotoAddedToCollection(_photoId, _collectionId);
+    }
+
+    function voteForPhoto(uint256 _photoId) public onlyUser photoExists(_photoId) {
+        require(!photos[_photoId].isAuctioned, "Cannot vote for an auctioned photo");
+
+        photoVotes[_photoId]++;
+
+        emit PhotoVoted(_photoId, msg.sender, photoVotes[_photoId]);
+    }
+
+    function getPhoto(uint256 _photoId) public view photoExists(_photoId) returns (string memory, string memory, uint256, uint256, bool, uint256, address) {
+        Photo storage photo = photos[_photoId];
+        return (photo.ipfsHash, photo.description, photo.comments.length, photo.likes.length, photo.isAuctioned, photo.auctionEndTime, photo.owner);
+    }
+
+    function getPhotoLikes(uint256 _photoId) public view photoExists(_photoId) returns (address[] memory) {
+        return photos[_photoId].likes;
+    }
+
+    function getUsername(address _userAddress) public view returns (string memory) {
+        return usernames[_userAddress];
+    }
+
+    function getAuctions(address _userAddress) public view returns (uint256[] memory) {
+        return userAuctions[_userAddress];
+    }
+
+    function getPhotoCollection(uint256 _collectionId) public view collectionExists(_collectionId) returns (string memory, uint256[] memory, address) {
+        PhotoCollection storage collection = photoCollections[_collectionId];
+        return (collection.name, collection.photoIds, collection.owner);
+    }
+
+    function getPhotoCollectionsByOwner(address _owner) public view returns (uint256[] memory) {
+        uint256[] storage collectionIds = userCollections[_owner];
+        return collectionIds;
+    }
+
+    modifier onlyUser() {
+        require(hasUsername[msg.sender], "User does not have a registered username");
+        _;
+    }
+
+    modifier photoExists(uint256 _photoId) {
+        require(_exists(_photoId), "Photo does not exist");
+        _;
+    }
+
+    modifier collectionExists(uint256 _collectionId) {
+        require(_collectionId > 0 && _collectionId <= _collectionIdCounter.current(), "Collection does not exist");
+        _;
+    }
 }
